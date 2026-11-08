@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water System Analytics</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f4f8; margin: 0; padding: 20px; text-align: center; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { color: #0077cc; margin-bottom: 5px; }
+        .status-box { font-size: 24px; font-weight: bold; margin: 20px 0; padding: 15px; border-radius: 8px; background: #e1f5fe; color: #0288d1; }
+        .btn { padding: 12px 30px; font-size: 16px; border: none; border-radius: 25px; cursor: pointer; color: white; font-weight: bold; transition: 0.2s; margin: 5px; }
+        .btn-on { background: #2ea44f; }
+        .btn-off { background: #cf222e; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 25px; }
+        .stat-card { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .stat-num { font-size: 22px; font-weight: bold; color: #0f172a; }
+        .stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; margin-top: 5px; }
+        .log-list { text-align: left; max-height: 250px; overflow-y: auto; background: #f1f5f9; padding: 10px; border-radius: 8px; font-size: 14px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Water Analytics</h1>
+    <p>Worldwide Control & Telemetry Panel</p>
+
+    <div class="status-box" id="currentStatus">Connecting to system...</div>
+
+    <div>
+        <button class="btn btn-on" onclick="sendCommand('REMOTE_ON')">Manual Start (10s)</button>
+        <button class="btn btn-off" onclick="sendCommand('REMOTE_OFF')">Manual Stop</button>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card"><div class="stat-num" id="dayCount">0</div><div class="stat-label">Today</div></div>
+        <div class="stat-card"><div class="stat-num" id="monthCount">0</div><div class="stat-label">This Month</div></div>
+        <div class="stat-card"><div class="stat-num" id="yearCount">0</div><div class="stat-label">This Year</div></div>
+    </div>
+
+    <h3>Detailed Timing History</h3>
+    <div class="log-list" id="logList">No activation records yet...</div>
+</div>
+
+<script>
+    // FIXED: Embedded with your exact Singapore server link
+    const firebaseURL = "https://wateranalytics-e28b4-default-rtdb.asia-southeast1.firebasedatabase.app/";
+
+    function sendCommand(cmd) {
+        fetch(firebaseURL + "command.json", {
+            method: "PUT",
+            body: JSON.stringify(cmd)
+        });
+    }
+
+    async function updateDashboard() {
+        try {
+            // 1. Fetch live status
+            let statusRes = await fetch(firebaseURL + "status.json");
+            let statusData = await statusRes.json();
+            if(statusData) {
+                document.getElementById("currentStatus").innerText = "Pump Status: " + statusData.current;
+                document.getElementById("currentStatus").style.background = statusData.current === "ON" ? "#e6ffed" : "#ffebe9";
+                document.getElementById("currentStatus").style.color = statusData.current === "ON" ? "#1a7f37" : "#cf222e";
+            }
+
+            // 2. Fetch activation history logs
+            let logsRes = await fetch(firebaseURL + "logs.json");
+            let logsData = await logsRes.json();
+            
+            if (logsData) {
+                let logArray = Object.values(logsData).reverse(); 
+                let now = new Date();
+                let dayC = 0, monthC = 0, yearC = 0;
+                let logHTML = "";
+
+                logArray.forEach(log => {
+                    if(log.timestamp && log.state === "ON") {
+                        let logDate = new Date(log.timestamp);
+                        
+                        // Calculate Time Statistics
+                        if(logDate.toDateString() === now.toDateString()) dayC++;
+                        if(logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear()) monthC++;
+                        if(logDate.getFullYear() === now.getFullYear()) yearC++;
+
+                        // Format Text Display
+                        logHTML += `<div>💧 <b>ON:</b> ${logDate.toLocaleString()}</div>`;
+                    }
+                });
+
+                document.getElementById("dayCount").innerText = dayC;
+                document.getElementById("monthCount").innerText = monthC;
+                document.getElementById("yearCount").innerText = yearC;
+                document.getElementById("logList").innerHTML = logHTML || "No cycles registered yet.";
+            }
+        } catch (e) {
+            console.error("Data syncing error: ", e);
+        }
+    }
+
+    setInterval(updateDashboard, 2500);
+    updateDashboard();
+</script>
+
+</body>
+</html>
